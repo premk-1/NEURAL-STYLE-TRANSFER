@@ -1,1 +1,133 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import models, transforms
+from PIL import Image
+import matplotlib.pyplot as plt
 
+# Loading and prepping images (because raw pixels are ugly)
+def load_image(img_path, max_size=400, shape=None):
+    img = Image.open(img_path).convert('RGB')
+    size = max_size if max(img.size) > max_size else max(img.size)
+    if shape:
+        size = shape
+    trans = transforms.Compose([
+        transforms.Resize((size, size)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    ])
+    img = trans(img)[:3, :, :].unsqueeze(0)
+    return img
+
+# Convert that gross tensor back to an image you can actually look at
+def im_convert(tensor):
+    image = tensor.cpu().clone().detach().numpy().squeeze()
+    image = image.transpose(1, 2, 0)
+    image = image * (0.229, 0.224, 0.225) + (0.485, 0.456, 0.406)
+    image = image.clip(0, 1)
+    return image
+
+# Grab the content and style images
+content = load_image('content.jpg')
+style = load_image('style.jpg', shape=[content.size(2), content.size(3)])
+
+# Show 'em off
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7))
+ax1.imshow(im_convert(content))
+ax1.set_title('Content Image')
+ax2.imshow(im_convert(style))
+ax2.set_title('Style Image')
+plt.show()
+
+# Bring out the big guns: VGG19 pre-trained model
+vgg = models.vgg19(pretrained=True).features
+
+# Don’t let PyTorch mess with these weights
+for param in vgg.parameters():
+    param.requires_grad = False
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+vgg.to(device)
+content = content.to(device)
+style = style.to(device)
+
+# Get features from certain layers, because not all layers are created equal
+def get_features(image, model, layers=None):
+    if not layers:
+        layers = {
+            '0': 'conv1_1',
+            '5': 'conv2_1',
+            '10': 'conv3_1',
+            '19': 'conv4_1',
+            '21': 'conv4_2',  # This one’s for content
+            '28': 'conv5_1'
+        }
+    feats = {}
+    x = image
+    for name, layer in model._modules.items():
+        x = layer(x)
+        if name in layers:
+            feats[layers[name]] = x
+    return feats
+
+# Gram matrix math magic
+def gram_matrix(tensor):
+    _, d, h, w = tensor.size()
+    tensor = tensor.view(d, h * w)
+    gram = torch.mm(tensor, tensor.t())
+    return gram
+
+# Ok, time to actually get the features
+content_features = get_features(content, vgg)
+style_features = get_features(style, vgg)
+style_grams = {lyr: gram_matrix(style_features[lyr]) for lyr in style_features}
+
+# Start with a copy of content, but make it trainable
+target = content.clone().requires_grad_(True).to(device)
+
+# Set up style weights. These are totally made up, but they work.
+style_weights = {
+    'conv1_1': 1.0,
+    'conv2_1': 0.8,
+    'conv3_1': 0.5,
+    'conv4_1': 0.3,
+    'conv5_1': 0.1
+}
+
+content_weight = 1
+style_weight = 1e6
+
+optimizer = optim.Adam([target], lr=0.003)
+
+# The glory of the training loop
+steps = 2000
+for step in range(steps):
+    target_features = get_features(target, vgg)
+
+    content_loss = torch.mean((target_features['conv4_2'] - content_features['conv4_2']) ** 2)
+
+    style_loss = 0
+    for layer in style_weights:
+        target_feat = target_features[layer]
+        target_gram = gram_matrix(target_feat)
+        style_gram = style_grams[layer]
+        layer_loss = style_weights[layer] * torch.mean((target_gram - style_gram) ** 2)
+        _, d, h, w = target_feat.shape
+        style_loss += layer_loss / (d * h * w)
+
+    total_loss = content_weight * content_loss + style_weight * style_loss
+
+    optimizer.zero_grad()
+    total_loss.backward()
+    optimizer.step()
+
+    if step % 500 == 0:
+        print(f"Step {step}, Total loss: {total_loss.item()} (yeah, still chugging along)")
+
+# Time for the grand reveal
+final_img = im_convert(target)
+plt.figure(figsize=(10, 10))
+plt.imshow(final_img)
+plt.title('Stylized Image')
+plt.axis('off')
+plt.show()
