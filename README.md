@@ -12,10 +12,12 @@
 
 # OUTPUT 1
 
+![Screenshot 2025-06-23 015558](https://github.com/user-attachments/assets/689d5b22-f3a8-4c0e-9179-f02b219046d7)
 
 
 # OUTPUT 2
 
-![WhatsApp Image 2025-06-23 at 01 44 54_7d0e598e](https://github.com/user-attachments/assets/f5929dd3-7010-4860-9ed8-222bf4448154)
+![Screenshot 2025-06-23 015534](https://github.com/user-attachments/assets/978c0ed6-11a0-4fb1-b939-d36a04512340)
+
 
 
