@@ -15,9 +15,3 @@
 ![Screenshot 2025-06-23 015558](https://github.com/user-attachments/assets/689d5b22-f3a8-4c0e-9179-f02b219046d7)
 
 
-# OUTPUT 2
-
-![Screenshot 2025-06-23 015534](https://github.com/user-attachments/assets/978c0ed6-11a0-4fb1-b939-d36a04512340)
-
-
-
